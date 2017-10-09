@@ -15,10 +15,10 @@ then
   ./unfft
 fi
 
-feh -d -g+1000+0 fft_c.png
+#feh -d -g+1000+0 fft_c.png
 # feh -d -g+1000+0 u.png
 # feh -d -g+1000+0 s.png
-# feh -d -g+1000+0 un_s.png
+ feh -d -g+1000+0 un_c.png
 
 
 #convert s.png n.30-70.png -compose Mathematics -define compose:args='0,1,1,-0.5' -composite c.png

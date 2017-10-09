@@ -95,12 +95,7 @@ func main() {
 	im_fft_c := image.NewGray(image.Rect(0, 0, width, height))
 	for c := 0; c < width; c++ {
 		for r := 0; r < height; r++ {
-			h := math.Log(abs_fft_c[c*height+r]) //* 255 / h_max
-
-			cc := (c + width/2) % width
-			rr := (r + height/2) % height
-			h = math.Log(cmplx.Abs(fft_c[cc][rr])) //* 255 / h_max
-
+			h := math.Log1p(abs_fft_c[c*height+r]) * 255 / math.Log1p(h_max)
 			im_fft_c.Set(c, r, color.Gray{uint8(h)})
 		}
 	}
@@ -109,22 +104,32 @@ func main() {
 	png.Encode(f_fft_c, im_fft_c)
 	fmt.Printf("saved %s\n", f_fft_c.Name())
 
-	// var (
-	// 	//xaI, xbI, xcI        float64
-	// 	//xaIO, xbIO, xcIO     float64
-	// 	xaE, xbE, xcE          float64
-	// 	xaEO, xbEO, xcEO       float64
-	// 	deltaI, deltaE, deltaO float64
-	// 	rO                     float64
-	// )
-	// xaE, xbE, xcE, deltaE = approx(img, width, height, 10, 1)
+	// for r := 2; r < 200; r++ {
+	// 	_, _, _, deltaI := approx(abs_fft_c, width, height, r, -1)
+	// 	xaE, xbE, xcE, deltaE := approx(abs_fft_c, width, height, r, 1)
+	// 	fmt.Printf("%d: %f	%f	%f	%f	%f	%f\n", r, xaE, xbE, xcE, deltaE, deltaI, deltaE+deltaI)
+	// }
+
+	//!xaE, xbE, xcE, _ := approx(abs_fft_c, width, height, 10, 1)
 
 	// un_c
 	fft_un_c := make([][]complex128, width)
 	for c := 0; c < width; c++ {
 		fft_un_c[c] = make([]complex128, height)
 		for r := 0; r < height; r++ {
-			fft_un_c[c][r] = fft_c[c][r] / fft_n[c][r] // TODO: *xxx
+
+			//!x := float64(c)
+			//!y := float64(r)
+
+			fft_un_c[c][r] = fft_c[c][r] / fft_n[c][r]
+
+			//N2 := (xaE*x + xbE*y + xcE) * (xaE*x + xbE*y + xcE)
+			//C2 := cmplx.Abs(fft_c[c][r]) * cmplx.Abs(fft_c[c][r])
+			//fft_un_c[c][r] *= complex((C2-N2)/C2, 0)
+			// BUG !
+			// if (C2-N2)/C2 < 0 {
+			// 	fmt.Println(C2, N2)
+			// }
 		}
 	}
 	un_c := fft.IFFT2(fft_un_c)
@@ -148,7 +153,7 @@ func main() {
 
 // side = 1 => exterior
 // side = -1 => interior
-func approx(img []float64, w int, h int, dr int, side int) (xa, xb, xc, delta float64) {
+func approx(img []float64, width int, height int, dr int, side int) (xa, xb, xc, delta float64) {
 	xa = 0
 	xb = 0
 	xc = 0
@@ -176,38 +181,37 @@ func approx(img []float64, w int, h int, dr int, side int) (xa, xb, xc, delta fl
 	// x1 y1  1 | f
 
 	n := 0
-	for c := 0; c < w; c++ {
-		for r := 0; r < h; r++ {
-			x := c - w/2
-			y := r - h/2
-			if x >= 0 && y >= 0 && side*(x*x+y*y) > side*(dr*dr) {
+	for c := 0; c < width/2; c++ {
+		for r := 0; r < height/2; r++ {
+			if side*(c*c+r*r) > side*(dr*dr) {
 				n = n + 1
 			}
 		}
 	}
 
 	var (
-		x2, y2, xy, x1, y1 float64
-		f, fx, fy          float64
+		x2, y2, xy, x1, y1, I float64
+		F, Fx, Fy             float64
 	)
-	dd := 1 / float64(n)
-	for c := 0; c < w; c++ {
-		for r := 0; r < h; r++ {
-			f_im := img[c*h+r]
+	dd := 1.0 / float64(n)
+	for c := 0; c < width/2; c++ {
+		for r := 0; r < height/2; r++ {
+			f_im := img[c*height+r]
 
-			x := c - w/2
-			y := r - h/2
+			x := c
+			y := r
 
-			if x >= 0 && y >= 0 && side*(x*x+y*y) > side*(dr*dr) {
+			if side*(c*c+r*r) > side*(dr*dr) {
 				x2 += float64(x*x) * dd
 				y2 += float64(y*y) * dd
 				xy += float64(x*y) * dd
 				x1 += float64(x) * dd
 				y1 += float64(y) * dd
+				I += dd
 
-				f += f_im * dd
-				fx += float64(x) * f_im * dd
-				fy += float64(y) * f_im * dd
+				F += f_im * dd
+				Fx += float64(x) * f_im * dd
+				Fy += float64(y) * f_im * dd
 			}
 		}
 	}
@@ -215,9 +219,9 @@ func approx(img []float64, w int, h int, dr int, side int) (xa, xb, xc, delta fl
 	a := mat64.NewDense(3, 3, []float64{
 		x2, xy, x1,
 		xy, y2, y1,
-		x1, y1, 1,
+		x1, y1, I,
 	})
-	b := mat64.NewVector(3, []float64{fx, fy, f})
+	b := mat64.NewVector(3, []float64{Fx, Fy, F})
 
 	var x mat64.Vector
 	if err := x.SolveVec(a, b); err != nil {
@@ -228,13 +232,12 @@ func approx(img []float64, w int, h int, dr int, side int) (xa, xb, xc, delta fl
 	xa = x.At(0, 0)
 	xb = x.At(1, 0)
 	xc = x.At(2, 0)
-	for c := 0; c < w; c++ {
-		for r := 0; r < h; r++ {
-			x := float64(c - w/2)
-			y := float64(r - h/2)
-
-			if x >= 0 && y >= 0 && float64(side)*(x*x+y*y) > float64(side*dr*dr) {
-				delta += math.Sqrt((xa*x+xb*y+xc-img[c*h+r])*(xa*x+xb*y+xc-img[c*h+r])) * dd
+	for c := 0; c < width/2; c++ {
+		for r := 0; r < height/2; r++ {
+			if side*(c*c+r*r) > side*(dr*dr) {
+				x := float64(c)
+				y := float64(r)
+				delta += math.Sqrt((xa*x+xb*y+xc-img[c*height+r])*(xa*x+xb*y+xc-img[c*height+r])) * dd
 			}
 		}
 	}
@@ -257,4 +260,14 @@ func abs(img [][]complex128, width, height int) ([]float64, float64) {
 		}
 	}
 	return h, h_max
+}
+
+func dump(img []float64, width, height int, nm string) {
+	f, err := os.Create(nm + ".pgm")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	png.Encode(f_un_c, im_un_c)
+	fmt.Printf("saved %s\n", f_un_c.Name())
 }
