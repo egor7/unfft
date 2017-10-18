@@ -110,7 +110,7 @@ func main() {
 	// 	fmt.Printf("%d: %f	%f	%f	%f	%f	%f\n", r, xaE, xbE, xcE, deltaE, deltaI, deltaE+deltaI)
 	// }
 
-	xaE, xbE, xcE, _ := approx(fft_c, width, height, 50, 1)
+	//!xaE, xbE, xcE, _ := approx(fft_c, width, height, 50, 1)
 
 	// un_c
 	fft_un_c := make([][]complex128, width)
@@ -119,24 +119,38 @@ func main() {
 	for c := 0; c < width; c++ {
 		fft_un_c[c] = make([]complex128, height)
 		for r := 0; r < height; r++ {
+			k := 0.0
 
-			x := float64(c)
-			y := float64(r)
+			//!x := float64(c)
+			//!y := float64(r)
+			//!if x > float64(width/2) {
+			//!	x = float64(width) - x
+			//!}
+			//!if y > float64(height/2) {
+			//!	y = float64(height) - y
+			//!}
+			//!N2 := (xaE*x + xbE*y + xcE) * (xaE*x + xbE*y + xcE)
+			//!C2 := cmplx.Abs(fft_c[c][r]) * cmplx.Abs(fft_c[c][r])
+			//!
+			//!k = 1.0 - N2/C2
+			//!if k > 0 {
+			//!	k_pos += 1
+			//!} else {
+			//!	k = 0
+			//!	k_neg += 1
+			//!}
 
-			fft_un_c[c][r] = fft_c[c][r] / fft_n[c][r]
-
-			N2 := (xaE*x + xbE*y + xcE) * (xaE*x + xbE*y + xcE)
-			C2 := cmplx.Abs(fft_c[c][r]) * cmplx.Abs(fft_c[c][r])
-
-			k := 1.0 - N2/C2
-			if k > 0 {
-				k_pos += 1
-			} else {
+			// just ckeck
+			//if x*x+y*y > 100 {
+			cc := c //(c + width/2) % width
+			rr := r //(r + height/2) % height
+			if cc*cc+rr*rr > 100 {
 				k = 0
-				k_neg += 1
+			} else {
+				k = 1
 			}
 
-			Z := fft_un_c[c][r]
+			Z := fft_c[c][r] / fft_n[c][r]
 			fft_un_c[c][r] = complex(real(Z)*k, imag(Z))
 		}
 	}
