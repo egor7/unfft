@@ -110,28 +110,37 @@ func main() {
 	// 	fmt.Printf("%d: %f	%f	%f	%f	%f	%f\n", r, xaE, xbE, xcE, deltaE, deltaI, deltaE+deltaI)
 	// }
 
-	//!xaE, xbE, xcE, _ := approx(abs_fft_c, width, height, 10, 1)
+	xaE, xbE, xcE, _ := approx(fft_c, width, height, 50, 1)
 
 	// un_c
 	fft_un_c := make([][]complex128, width)
+	k_pos := 0
+	k_neg := 0
 	for c := 0; c < width; c++ {
 		fft_un_c[c] = make([]complex128, height)
 		for r := 0; r < height; r++ {
 
-			//!x := float64(c)
-			//!y := float64(r)
+			x := float64(c)
+			y := float64(r)
 
 			fft_un_c[c][r] = fft_c[c][r] / fft_n[c][r]
 
-			//N2 := (xaE*x + xbE*y + xcE) * (xaE*x + xbE*y + xcE)
-			//C2 := cmplx.Abs(fft_c[c][r]) * cmplx.Abs(fft_c[c][r])
-			//fft_un_c[c][r] *= complex((C2-N2)/C2, 0)
-			// BUG !
-			// if (C2-N2)/C2 < 0 {
-			// 	fmt.Println(C2, N2)
-			// }
+			N2 := (xaE*x + xbE*y + xcE) * (xaE*x + xbE*y + xcE)
+			C2 := cmplx.Abs(fft_c[c][r]) * cmplx.Abs(fft_c[c][r])
+
+			k := 1.0 - N2/C2
+			if k > 0 {
+				k_pos += 1
+			} else {
+				k = 0
+				k_neg += 1
+			}
+
+			Z := fft_un_c[c][r]
+			fft_un_c[c][r] = complex(real(Z)*k, imag(Z))
 		}
 	}
+	fmt.Printf("k_pos %d, k_neg %d\n", k_pos, k_neg)
 	un_c := fft.IFFT2(fft_un_c)
 
 	// save un_c
@@ -153,7 +162,9 @@ func main() {
 
 // side = 1 => exterior
 // side = -1 => interior
-func approx(img []float64, width int, height int, dr int, side int) (xa, xb, xc, delta float64) {
+//
+// img in [0..width/2, 0..height/2]
+func approx(img [][]complex128, width int, height int, dr int, side int) (xa, xb, xc, delta float64) {
 	xa = 0
 	xb = 0
 	xc = 0
@@ -196,12 +207,12 @@ func approx(img []float64, width int, height int, dr int, side int) (xa, xb, xc,
 	dd := 1.0 / float64(n)
 	for c := 0; c < width/2; c++ {
 		for r := 0; r < height/2; r++ {
-			f_im := img[c*height+r]
-
-			x := c
-			y := r
-
 			if side*(c*c+r*r) > side*(dr*dr) {
+				f_im := cmplx.Abs(img[c][r])
+
+				x := c
+				y := r
+
 				x2 += float64(x*x) * dd
 				y2 += float64(y*y) * dd
 				xy += float64(x*y) * dd
@@ -235,9 +246,12 @@ func approx(img []float64, width int, height int, dr int, side int) (xa, xb, xc,
 	for c := 0; c < width/2; c++ {
 		for r := 0; r < height/2; r++ {
 			if side*(c*c+r*r) > side*(dr*dr) {
+				f_im := cmplx.Abs(img[c][r])
+
 				x := float64(c)
 				y := float64(r)
-				delta += math.Sqrt((xa*x+xb*y+xc-img[c*height+r])*(xa*x+xb*y+xc-img[c*height+r])) * dd
+
+				delta += math.Sqrt((xa*x+xb*y+xc-f_im)*(xa*x+xb*y+xc-f_im)) * dd
 			}
 		}
 	}
@@ -245,6 +259,7 @@ func approx(img []float64, width int, height int, dr int, side int) (xa, xb, xc,
 	return
 }
 
+// img in [0..width/2, 0..height/2]
 func abs(img [][]complex128, width, height int) ([]float64, float64) {
 	h := make([]float64, width*height)
 	h_max := 0.0
@@ -262,12 +277,12 @@ func abs(img [][]complex128, width, height int) ([]float64, float64) {
 	return h, h_max
 }
 
-func dump(img []float64, width, height int, nm string) {
-	f, err := os.Create(nm + ".pgm")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-	png.Encode(f_un_c, im_un_c)
-	fmt.Printf("saved %s\n", f_un_c.Name())
-}
+// func dump(img []float64, width, height int, nm string) {
+// 	f, err := os.Create(nm + ".pgm")
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	defer f.Close()
+// 	png.Encode(f_un_c, im_un_c)
+// 	fmt.Printf("saved %s\n", f_un_c.Name())
+// }
